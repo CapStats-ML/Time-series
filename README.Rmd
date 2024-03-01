@@ -1,0 +1,60 @@
+---
+title: "README"
+author: "Cesar Prieto - Gabriel Peña - Gerardo Gil"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# Repositorio de Series de Tiempo 
+
+Bienvenido al repositorio de Series de Tiempo.
+Este espacio está dedicado al estudio, análisis y aplicación de técnicas relacionadas con el análisis de series temporales.
+Desde modelos básicos hasta enfoques avanzados, este repositorio proporciona recursos, herramientas y ejemplos para comprender y trabajar con datos temporales.
+
+## ¿Qué encontrarás aquí? 
+
+### Documentación:
+
+-   Guías y tutoriales sobre conceptos clave en el análisis de series temporales.
+
+-   Referencias a bibliografía y recursos útiles para profundizar en el tema.
+
+### Proyectos Grupales:
+
+-   Espacio para colaborar en proyectos grupales relacionados con series de tiempo.
+
+-   ideas, código y resultados con tus compañeros de clase.
+
+### Proyectos Individuales:
+
+-   Oportunidades para desarrollar y compartir proyectos individuales.
+
+-   Explora áreas específicas de interés o aplica técnicas particulares a conjuntos de datos únicos.
+
+### Código Ejemplar:
+
+-   Implementaciones de algoritmos y métodos comunes en el análisis de series de tiempo.
+
+-   Ejemplos de código limpio y bien documentado para ayudarte a empezar rápidamente.
+
+### Recursos Adicionales:
+
+-   Enlaces a bibliotecas, herramientas y conjuntos de datos relevantes para el análisis de series temporales.
+
+-   Material complementario para fortalecer tus habilidades y conocimientos.
+
+## Colaboración 
+
+¡Te animamos a contribuir y colaborar en este repositorio!
+Si tienes ideas, mejoras o proyectos que quieras compartir, no dudes en enviar una solicitud de extracción (Pull Request) o abrir un problema (Issue).
+Este espacio es para que la comunidad académica crezca y aprenda junta.
+
+## Licencia 
+
+Este repositorio está bajo la licencia [INSERTA LA LICENCIA AQUÍ].
+Asegúrate de revisarla antes de contribuir o utilizar cualquier contenido de este repositorio.
+
+¡Esperamos que este repositorio sea un recurso útil para tus estudios y proyectos relacionados con series de tiempo!
