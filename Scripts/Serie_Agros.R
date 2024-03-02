@@ -5,7 +5,7 @@
 # - Precio de la acción medido en pesos 
 
 # Grupo 2
-# Script elborado por Sebastian Gil, Cesar Prieto, Gabriel Peña
+# Script elaborado por Sebastian Gil, Cesar Prieto, Gabriel Peña
 
 
 # Librerías y directorio ----
@@ -31,3 +31,4 @@ plot(x = Fecha , y = Mínimo , type = "l", main = 'Serie de tiempo variable LOW'
 
 # Análisis descriptivo y exploratorio de la serie
 
+# Esto es una línea de prueba, de SEBAS GIL
