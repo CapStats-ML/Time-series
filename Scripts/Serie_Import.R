@@ -8,10 +8,10 @@
 # Script elborado por Sebastian Gil, Cesar Prieto, Gabriel Peña
 
 
-
-# Librerías y directorio ----
+# Librerías y directorio --------------------------------------------------
 library(readxl)
 library(readr)
+
 
 # Importanción y reconocimiento de la base ----
 importaciones <- read.csv("Datos/Importaciones.csv")
@@ -54,6 +54,7 @@ vacid <- ts(importaciones[,7], start = c(2012, 01), frequency =12)
 pbk <- ts(importaciones[,8], start = c(2012, 01), frequency =12)
 pnk <- ts(importaciones[,9], start = c(2012, 01), frequency =12)
 
+# Primera exploración de variables
 plot(vacip)# no 
 plot(vafodo) # si
 plot(flete) # si 
@@ -318,7 +319,6 @@ pacf(dserie, 48)
 acf(dlserie, 48, main = "Serie diferenciada y con logaritmo de costos")
 pacf(dlserie, 48)
 
-
 ## Índice AMI -------------------------------------------------------
 # Indice de información mutua
 par(mar = c(3,2,3,2))
@@ -334,7 +334,118 @@ nonlinearTseries::mutualInformation(lserie, lag.max = 100,
                                     n.partitions = 50, 
                                     units = "Bits",
                                     do.plot = TRUE)
+## Explorando la estacionalidad subseries -------------------------
 
+monthplot(dserie)
+tsibble_serie %>% na.omit()|>gg_subseries(diff_serie, period = 12)
+
+tibble_sserie %>% na.omit()|>
+  mutate(
+    Mes = str_c("", as.character(lubridate::month(Fecha, label = TRUE)))
+  ) %>% 
+  plot_time_series(
+    .date_var = Fecha, 
+    .value = diff_sserie, 
+    .facet_vars = Mes, 
+    .facet_ncol = 4, 
+    .color_var = Mes,
+    .facet_scale = "fixed", 
+    .interactive = FALSE,
+    .legend_show = FALSE, 
+    .smooth = FALSE
+  )
+library(forecast)
+ggseasonplot(dserie)  
+
+# escala log
+monthplot(dlserie)
+tsibble_lserie %>% na.omit()|>gg_subseries(diff_lserie, period = 12)
+
+tibble_logserie %>% na.omit()|>
+  mutate(
+    Mes = str_c("", as.character(lubridate::month(Fecha, label = TRUE)))
+  ) %>% 
+  plot_time_series(
+    .date_var = Fecha, 
+    .value = diff_logserie, 
+    .facet_vars = Mes, 
+    .facet_ncol = 4, 
+    .color_var = Mes,
+    .facet_scale = "fixed", 
+    .interactive = FALSE,
+    .legend_show = FALSE, 
+    .smooth = FALSE
+  )
+library(forecast)
+ggseasonplot(dlserie)  
+
+## Gráfico de cajas --------------------------------------------------
+# basado en el objeto tibble
+
+tibble_sserie %>% na.omit() %>% 
+  plot_seasonal_diagnostics(
+    .date_var = Fecha,
+    .value = diff_sserie, 
+    .feature_set = c("month.lbl"), 
+    .geom = "boxplot"
+  )
+
+library(ggplot2)
+ggplot(tibble_sserie %>%na.omit()|>
+         mutate(
+           Mes = str_c("Mes ", as.character(lubridate::month(Fecha)))
+         ), aes(x = diff_sserie)) +
+  geom_density(aes(fill = Mes)) +
+  ggtitle("LosPass - Estimación de la densidad vía Kernel por mes") +
+  facet_grid(rows = vars(as.factor(Mes)))
+
+# escala log
+tibble_logserie %>% na.omit() %>% 
+  plot_seasonal_diagnostics(
+    .date_var = Fecha,
+    .value = diff_logserie, 
+    .feature_set = c("month.lbl"), 
+    .geom = "boxplot"
+  )
+
+library(ggplot2)
+ggplot(tibble_logserie %>%na.omit()|>
+         mutate(
+           Mes = str_c("Mes ", as.character(lubridate::month(Fecha)))
+         ), aes(x = diff_logserie)) +
+  geom_density(aes(fill = Mes)) +
+  ggtitle("LosPass - Estimación de la densidad vía Kernel por mes") +
+  facet_grid(rows = vars(as.factor(Mes)))
+
+## Periodograma -----------------------------------------------------
+
+spectrum(as.numeric(dserie), log = "no") #periodograma de la serie sin tendencia
+spectrum(as.numeric(dserie)) # al hacerlo en escala log los 
+
+# Ubicación del valor que hace al periodograma más grande
+ubicacionlogserie <- which.max(Periodgramadlserie$spec)
+sprintf("El valor de la frecuencia donde se máximiza el periodograma para le series es: %s", 
+        PeriodgramadlAirPass$frq[ubicacionlogAir])
+
+sprintf("El periodo correspondiente es aproximadamente: %s", 
+        1/PeriodgramadlAirPass$frq[ubicacionlogAir])
+
+
+# escala log
+spectrum(as.numeric(dlserie), log = "no") #periodograma de la serie sin tendencia
+spectrum(as.numeric(dlserie)) # al hacerlo en escala log los 
+
+# Ubicación del valor que hace al periodograma más grande
+ubicacionlogserie <- which.max(PeriodgramadlAirPass$spec)
+sprintf("El valor de la frecuencia donde se máximiza el periodograma para le series es: %s", 
+        PeriodgramadlAirPass$frq[ubicacionlogAir])
+
+sprintf("El periodo correspondiente es aproximadamente: %s", 
+        1/PeriodgramadlAirPass$frq[ubicacionlogAir])
+
+
+## Ajuste de la estocionalidad con componentes de Fourier y Dummy ----
+# linea de prueba
 
 
 
