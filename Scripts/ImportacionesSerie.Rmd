@@ -1,0 +1,242 @@
+---
+title: "Importaciones Colombianas via maritima"
+author: "Sebastian Gil, Cesar Prieto, Gabriel Peña"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight:.tango
+---
+output: 
+  html_document:
+    toc: true
+
+```{r setup, include=FALSE}
+
+library(readxl)
+library(readr)
+importaciones <- read.csv("C:/Users/gabop/OneDrive/U10/10ma/BasesDatosSeries/Series-de-Tiempo/Datos/Importaciones.csv")[1:120,]
+```
+
+```{r librerias, include=FALSE}
+library(forecast)
+library(MASS)
+library(tidyverse)
+library(lubridate)
+library(timetk)
+library(zoo)
+library(tsibble)
+library(dplyr)
+library(feasts)
+library(fable)
+library(astsa)
+library(nonlinearTseries)
+library(tseriesChaos)
+library(fabletools)
+library(TSA)
+library(VGAM)
+library(car)
+```
+
+
+## Contexto
+
+Esta serie consta del valor FOB en dólares de las importaciones que llegan a los puertos de Colombia vía marítima y su destino final es la ciudad de Bogotá, en el periodo transcurrido entre enero del 2012 hasta diciembre de 2021, la serie es de tipo **mensual**.
+
+**Definición:** El valor FOB en dólares de la mercancía, es valor de la mercancía en el momento que se carga a bordo del medio de transporte, en este caso el marítimo.
+
+La serie consta de 120 observaciones, lo que corresponde a los 10 transcurridos desde el 2012 hasta el 2021
+
+```{r grafíco1}
+# 1.000'000.000
+vafodo <- ts(importaciones[,3], start = c(2012, 01), frequency =12)/1000000000
+plot(vafodo, ylab = "Miles de millones de dólares", main = "Valor FOB", lw =2)
+
+```
+
+Visualmente vemos que la serie presenta una tendencia, una varianza no constante y 
+
+# 1. Parte descriptiva 
+
+## 1.1 Estabilización de la varianza
+### Transformación de Box-Cox
+```{r estabilización de la varianza 2}
+serie <- vafodo
+a <- MASS::boxcox(lm(serie ~ 1), seq(-1, 1, length = 50))
+
+BC.m <- a$x[which.max(a$y)]
+BC.f <- forecast::BoxCox.lambda(serie, method = "loglik", 
+                        lower = -1,
+                        upper = 1) 
+# Transformación logarítmica 
+lserie <- log(vafodo)
+a <- MASS::boxcox(lm(lserie ~ 1), seq(-2, 2, length = 50))
+
+BC.ml <- a$x[which.max(a$y)]
+BC.fl <- forecast::BoxCox.lambda(lserie, method = "loglik", 
+                        lower = -2,
+                        upper = 2) 
+
+c(BC.f, BC.fl, BC.m, BC.ml)
+```
+
+Los valores de $\lambda$ obtenidos por el método de Box-Cox tanto en el paquete
+MASS, como en el paquete forecast, son diferentes de 1 e inferiorese a 0, además
+el intervalo de confianza para $\lambda$ no captura el 1, por lo que se usará la transformación logarítmica. Una vez aplicada, notamos que el intervalo de confianza
+caputra al 1, por otra parte los valores de $\lambda$ siguen siendo inferiores a
+0.
+
+## 1.2 Estimación de la tendencia
+
+```{r Estimación de la tendencia}
+fit_lserie <- lm(lserie ~time(lserie), na.action = NULL)
+summary(fit_lserie)
+
+# Grafico
+plot(lserie, lw = 2, main = "Valor FOB en escala log", ylab = "Log de miles de millones de dólares")
+abline(fit_lserie, col = "blue", lw = 2)
+
+# Eliminando la tendencia
+lserie.sin.tend <- lserie - predict(fit_lserie)
+plot(lserie.sin.tend, main = "Valor FOB en escala log sin tendencia", lw =2)
+
+acf(lserie, lag.max = length(lserie))
+acf(lserie.sin.tend, lag.max = length(lserie.sin.tend))
+```
+
+
+
+
+## 1.3 Promedio móvil
+```{r promedio móvil}
+descomposicion_lserie <- decompose(lserie)
+plot(descomposicion_lserie)
+```
+
+
+## 1.4 Tendencia desde el STL
+```{r tendencia desde el stl, message=F}
+indice_lserie <- as.Date(as.yearmon(tk_index(lserie)))
+indice_lserie1 <- yearmonth(as.yearmon(tk_index(lserie)))
+
+
+# Forma alternativa de extraer el indice
+df_lserie <- data.frame(Fecha = indice_lserie, 
+                              lserie = as.matrix(lserie))
+tibble_lserie <- tibble(df_lserie)
+tsibble_lserie <- as_tsibble(df_lserie)
+
+# Primera aproximación al ajuste STL 
+# escala log
+tsibble_lserie %>%
+  timetk::plot_time_series(Fecha, lserie,
+                           .interactive = TRUE,
+                           .plotly_slider = TRUE)
+
+# Ajuste STL 
+# escala log
+tibble_lserie %>%  
+  mutate(lserie_ajust = smooth_vec(lserie,
+                                   span = 0.3,
+                                   degree =2)
+)
+
+# Ajuste STL moviendo los parámetros
+# escala log
+tsibble_lserie %>% mutate(
+  lserie_ajus = smooth_vec(lserie, span = 0.3, degree = 2)) %>% 
+  ggplot(aes(Fecha, lserie)) + 
+  geom_line(size =1.05)+
+  geom_line(aes(y = lserie_ajus), color = "blue", size =1.05) +
+  theme_bw()
+```
+
+### 1.4.1 STL Tendencia y estacionalidad
+```{r stl tendencia y estacionalidad}
+tsibble_lserie <- as_tsibble(lserie)
+
+tsibble_lserie %>% 
+  model(
+    STL(value ~ trend() + 
+          season(window = "periodic"),
+        robust = TRUE)) %>% 
+  components() %>% 
+  autoplot() +
+  theme_minimal()
+
+```
+
+## 1.5 Diferencia Ordinaria
+
+```{r diferencia ordinaria, warning=F}
+# escala log
+tsibble_lserie|>mutate(
+  diff_lserie = tsibble::difference(value, lag = 1, 
+                                     differences = 1))|>
+  autoplot(.vars = diff_lserie, size = 1.05) + 
+  labs(subtitle = "Cambios en escala log del valor FOB") +
+  theme_bw()
+
+tsibble_lserie <- tsibble_lserie|>mutate(
+  diff_lserie = tsibble::difference(value, lag = 1,
+                                      difference = 1))
+
+# Diferenciando basado en el objeto tibble
+tibble_lserie %>% 
+  mutate(diff_lserie = lserie - lag(lserie)) %>% 
+  plot_time_series(Fecha, diff_lserie)
+
+tibble_lserie <- tibble_lserie %>% 
+  mutate(diff_lserie = lserie - lag(lserie))
+
+```
+
+## 1.6 Relaciones no lineales dispersión  
+```{r Relaciones no lineales}
+par(mar = c(3,2,3,2))
+astsa::lag1.plot(lserie, 12, corr = T)
+```
+
+## 1.7 ACF
+
+
+## 1.8 Índice AMI
+
+
+## 1.9 Exploración de la Estacionalidad
+
+### 1.9.1 Gráfico de cajas
+### 1.9.2 Periodograma
+### 1.9.3 Ajuste de la estacionalidad con componentes de Fourier y Dummy
+### 1.9.4 Múltiples patrones estacionales
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
