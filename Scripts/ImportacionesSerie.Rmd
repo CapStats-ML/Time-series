@@ -1,9 +1,18 @@
 ---
-title: "Importaciones Colombianas via maritima"
-author: "Sebastian Gil, Cesar Prieto, Gabriel Peña"
+title: "Importaciones Colombianas vía marítima"
+author: "Sebastian Gil, Gabriel Peña, Cesar Prieto"
+
+date: "`r Sys.Date()`"
+
 output: 
-  html_document:
-    toc: true
+  rmdformats::readthedown:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight: tango
+    code_folding: hide
+
 ---
 
 
@@ -11,7 +20,7 @@ output:
 
 library(readxl)
 library(readr)
-importaciones <- read.csv("C:/Users/gabop/OneDrive/U10/10ma/BasesDatosSeries/Series-de-Tiempo/Datos/Importaciones.csv")[1:120,]
+importaciones <- read.csv("C:/Users/gsgil/Documents/sebastiangils/Universidad/Semestre_10/Series/Proyecto/Series-de-Tiempo/Datos/Importaciones.csv")[1:120,]
 ```
 
 ```{r librerias, include=FALSE}
