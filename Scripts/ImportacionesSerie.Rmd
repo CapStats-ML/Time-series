@@ -1,17 +1,11 @@
 ---
 title: "Importaciones Colombianas via maritima"
 author: "Sebastian Gil, Cesar Prieto, Gabriel Peña"
-output:
-  rmdformats::downcute:
-    self_contained: true
-    thumbnails: true
-    lightbox: true
-    gallery: false
-    highlight:.tango
----
 output: 
   html_document:
     toc: true
+---
+
 
 ```{r setup, include=FALSE}
 
