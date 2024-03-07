@@ -30,14 +30,14 @@ names(importaciones)
 # PBK: peso bruto en kilos.
 # PNK: peso neto en kilos.
 
-data$Último <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Último)))
-data$Apertura <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Apertura)))
-data$Máximo <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Máximo)))
-data$Mínimo <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Mínimo)))
-v <- data$Vol.
-data$Vol. <- as.numeric(gsub(",",".",gsub("K", "", data$Vol.))) * ifelse(grepl("K", v), 1000, 1)
-data$X..var. <- as.numeric(gsub("%", "", gsub(",", ".", data$X..var.)))
-sum(is.na(data$Vol.))
+# data$Último <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Último)))
+# data$Apertura <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Apertura)))
+# data$Máximo <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Máximo)))
+# data$Mínimo <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Mínimo)))
+# v <- data$Vol.
+# data$Vol. <- as.numeric(gsub(",",".",gsub("K", "", data$Vol.))) * ifelse(grepl("K", v), 1000, 1)
+# data$X..var. <- as.numeric(gsub("%", "", gsub(",", ".", data$X..var.)))
+# sum(is.na(data$Vol.))
 
 
 sum(is.na(importaciones))
@@ -109,12 +109,34 @@ a <- MASS::boxcox(lm(serie ~ 1), seq(-2, 7, length = 50))
 
 a$x[which.max(a$y)]
 abline(v = a$x[which.max(a$y)], col= "red")
-?abline()
-plot(a, lambda = a$x[which.max(a$y)])
 
+
+plot(serie)
+plot(BoxCox(serie, lambda = 0.75))
+plot(BoxCox(serie, lambda = 0.4545455))
+
+# Graficar la serie original
+plot(serie, type = "l", col = "black", lwd = 2, main = "Gráfica con Box-Cox")
+# Graficar BoxCox con lambda = 0.75
+lines(BoxCox(serie, lambda = 0.75), col = "red", lwd = 2)
+# Graficar BoxCox con lambda = 0.4545
+lines(BoxCox(serie, lambda = 0.4545455), col = "green", lwd = 2)
+
+
+# Agregar leyenda
+legend("topright", legend = c("Original", "Lambda = 0.75", "Lambda = 0.4545"), 
+       col = c("black", "red", "green"), lwd = 2)
+
+min(serie)
+serie
 lserie <- log(serie)
 plot(lserie)
 plot(serie)
+
+# Definimos la serie con lambda 0.4545
+serie <- BoxCox(serie, lambda = 0.4545)
+plot(serie)
+
 ## Estimación de la tendencia -----
 fit_serie <- lm (serie ~ time(serie), na.action = NULL)
 summary(fit_serie)
@@ -126,8 +148,8 @@ summary(fit_lserie)
 # Justificar por qué no le quitamos la tendencia
 # Regresión paramétrica no hay tendencia lineal
 
-
-plot(serie, ylab = "Valor/Costo en escala logarítmica")
+plot(serie)
+plot(serie, ylab = "Valor")
 abline(fit_serie, col = "red") 
 
 # modelo en escala log
@@ -142,8 +164,16 @@ serie.sin.tend <- serie- predict(fit_serie)
 # serie sin tendencia en escala log
 lserie.sin.tend <- lserie- predict(fit_lserie)
 
-plot(serie.sin.tend, main = "Serie Log sin tendencia")
+plot(serie, main = "Serie sin tendencia", col = "black", lwd = 1.7,
+     ylim =c(-10,20))
+lines(serie.sin.tend, col = "red", lwd = 1.7)
+
+# Agregar leyenda
+legend("topright", legend = c("Lambda = 0.4545", "Sin tendencia" ), 
+       col = c("black", "red"), lwd = 2)
+
 acf(serie, lag.max = length(lserie))
+
 # nos da -indicios- de estacionalidad
 acf(serie.sin.tend, lag.max = length(serie.sin.tend)) 
 
@@ -159,14 +189,17 @@ acf(lserie.sin.tend, lag.max = length(lserie.sin.tend))
 descomposicion_serie <- decompose(serie)
 plot(descomposicion_serie)
 
+descomposicion_serie.sin.tend <- decompose(serie.sin.tend)
+plot(descomposicion_serie.sin.tend)
+
 descomposicion_lserie <- decompose(lserie)
 plot(descomposicion_lserie)
 
 ## Tendencia de STL -----
-
+# Ajuste no paramétrico
 indice_serie <- as.Date(as.yearmon(tk_index(serie)))
 indice_serie1 <- yearmonth(as.yearmon(tk_index(serie)))
-
+plot(indice_serie1)
 
 indice_logserie <- as.Date(as.yearmon(tk_index(lserie)))
 indice_logserie1 <- yearmonth(as.yearmon(tk_index(lserie)))
@@ -201,7 +234,9 @@ tsibble_serie %>%
 
 # Ajuste STL 
 tibble_serie %>%  mutate(
-  serie_ajust =smooth_vec(sserie, span = 0.75, degree =2)
+  serie_ajust =smooth_vec(sserie,
+                          span = 0.14,
+                          degree =2)
 )
 
 # escala log
@@ -211,7 +246,9 @@ tibble_logserie %>%  mutate(
 
 # Ajuste STL moviendo los parámetros
 tibble_serie %>% mutate(
-  serie_ajus = smooth_vec(sserie, span = 0.9, degree = 2)) %>% 
+  serie_ajus = smooth_vec(sserie, 
+                          span = 0.15, # mas bajo mejor ajuste
+                          degree = 2)) %>% 
   ggplot(aes(Fecha, sserie)) + 
   geom_line()+
   geom_line(aes(y = serie_ajus), color = "red")
@@ -254,6 +291,7 @@ tsibble_serie|>mutate(
                                     differences = 1))|>
   autoplot(.vars = diff_serie) + 
   labs(subtitle = "Cambio del Costo")
+
 # escala log
 tsibble_lserie|>mutate(
   diff_lserie = tsibble::difference(value, lag = 1, 
