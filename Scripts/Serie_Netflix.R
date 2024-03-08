@@ -35,3 +35,5 @@ plot(x = Date , y = Low , type = "l", main = 'Serie de tiempo variable LOW')
 
 # Análisis descriptivo y exploratorio de la serie
 
+#ñalskdjfñalskdjf asdf -asd gaboksjdfhaklsjhdf
+# felkajsdlkfj
