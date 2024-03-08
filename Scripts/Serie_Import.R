@@ -14,7 +14,7 @@ library(readr)
 
 
 # Importanción y reconocimiento de la base ----
-importaciones <- read.csv("Datos/Importaciones.csv")
+importaciones <- read.csv("Datos/Importaciones.csv")[1:120,]
 names(importaciones)
 
 # Definiciones
@@ -29,33 +29,22 @@ names(importaciones)
 # IMP1: impuesto a las ventas.
 # PBK: peso bruto en kilos.
 # PNK: peso neto en kilos.
-
-# data$Último <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Último)))
-# data$Apertura <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Apertura)))
-# data$Máximo <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Máximo)))
-# data$Mínimo <- as.numeric(gsub(",", ".", gsub("\\.", "", data$Mínimo)))
-# v <- data$Vol.
-# data$Vol. <- as.numeric(gsub(",",".",gsub("K", "", data$Vol.))) * ifelse(grepl("K", v), 1000, 1)
-# data$X..var. <- as.numeric(gsub("%", "", gsub(",", ".", data$X..var.)))
-# sum(is.na(data$Vol.))
-
-
-sum(is.na(importaciones))
+sum(is.na(importaciones[,3]))
 a <- c()
 for ( i in 3:9){
   a <- c(a, sum(is.na(importaciones[,i])))
 }
 
-vacip <- ts(importaciones[,3], start = c(2012, 01), frequency =12)
-vafodo <- ts(importaciones[,4], start = c(2012, 01), frequency =12)
-flete <- ts(importaciones[,5], start = c(2012, 01), frequency =12)
-imp1 <- ts(importaciones[,6], start = c(2012, 01), frequency =12)
-vacid <- ts(importaciones[,7], start = c(2012, 01), frequency =12)
-pbk <- ts(importaciones[,8], start = c(2012, 01), frequency =12)
-pnk <- ts(importaciones[,9], start = c(2012, 01), frequency =12)
+vacip <- ts(importaciones[,2], start = c(2012, 01), frequency =12)
+vafodo <- ts(importaciones[,3], start = c(2012, 01), frequency =12)
+flete <- ts(importaciones[,4], start = c(2012, 01), frequency =12)
+imp1 <- ts(importaciones[,5], start = c(2012, 01), frequency =12)
+vacid <- ts(importaciones[,6], start = c(2012, 01), frequency =12)
+pbk <- ts(importaciones[,7], start = c(2012, 01), frequency =12)
+pnk <- ts(importaciones[,8], start = c(2012, 01), frequency =12)
 
 # Primera exploración de variables
-plot(vacip)# no 
+plot(vacip)# si
 plot(vafodo) # si
 plot(flete) # si 
 plot(imp1) # no
@@ -76,10 +65,12 @@ library(tsibble)
 library(dplyr)
 library(feasts)
 library(fable)
-library(tsibble)
 library(astsa)
 library(nonlinearTseries)
 library(tseriesChaos)
+library(fabletools)
+library(TSA)
+
 
 
 # Descriptivo -------------------------------------------------------------
@@ -97,7 +88,7 @@ plot(serie)
 forecast::BoxCox.lambda(serie, method = "loglik", 
                         lower = -2, # limitie menor para el lambda 
                         upper = 2) # limite superior para el lambda
-plot(BoxCox(serie, lambda = 0.75))
+plot(BoxCox(serie, lambda = -0.1))
 # NO parece haber mucha diferencia entre ambos graficos
 # plot(BoxCox(serie, lambda = 0.75)) y plot(serie)
 # podría decirse que la varianza es la misma
@@ -110,22 +101,12 @@ a <- MASS::boxcox(lm(serie ~ 1), seq(-2, 7, length = 50))
 a$x[which.max(a$y)]
 abline(v = a$x[which.max(a$y)], col= "red")
 
-
-plot(serie)
-plot(BoxCox(serie, lambda = 0.75))
-plot(BoxCox(serie, lambda = 0.4545455))
-
 # Graficar la serie original
 plot(serie, type = "l", col = "black", lwd = 2, main = "Gráfica con Box-Cox")
 # Graficar BoxCox con lambda = 0.75
-lines(BoxCox(serie, lambda = 0.75), col = "red", lwd = 2)
-# Graficar BoxCox con lambda = 0.4545
-lines(BoxCox(serie, lambda = 0.4545455), col = "green", lwd = 2)
-
-
-# Agregar leyenda
-legend("topright", legend = c("Original", "Lambda = 0.75", "Lambda = 0.4545"), 
-       col = c("black", "red", "green"), lwd = 2)
+plot(BoxCox(serie, lambda = BC.f), col = "black", lwd = 2,
+     ylim = c(2, 3), main = "Gráfica con Box-Cox", ylab = "")
+lines(BoxCox(serie, lambda = BC.m), col = "blue", lwd = 2)
 
 min(serie)
 serie
@@ -484,6 +465,106 @@ sprintf("El periodo correspondiente es aproximadamente: %s",
 
 ## Ajuste de la estocionalidad con componentes de Fourier y Dummy ----
 # linea de prueba
+tsibble_lserie <- as_tsibble(serie)
+tsibble_serie <- as_tsibble(serie)
+
+#Variables Dummy y Armónicos
+forecast::seasonaldummy(serie)
+Armonicos = TSA::harmonic(serie, m = 1)
+
+# Armóicos
+forecast::fourier(serie, K = 1)
+tiempo = 1 
+j = 1
+sin ( 2 * pi *tiempo* j/12)
+cos ( 2 * pi * tiempo * j /12)
+
+# Gráfica de los armónicos
+harmonics = fourier(serie, K = 6)
+harmonics
+par (mar = c(1,4,1,1), mfrow = c(6,2))
+
+for (i in 1:ncol(harmonics)){
+  plot(harmonics[,i], 
+       type = 'l', xlab = "Time", ylab = colnames(harmonics)[i])
+} 
+
+par(mar = rep(4,4), mfrow = c(1,1))
+
+diff_tsibble <- tsibble_serie|>
+  mutate(logdiff_air = difference(log(value)))|>
+  select(logdiff_air) 
+
+# Explore diferentes valores de K
+# Estimar los coeficientes 
+Modelo_serie_diff <- diff_tsibble|>
+  model('Fourier1Airdiff' = ARIMA(
+    logdiff_air~fourier(K=2)+ # coeficientes de fourier de orden 2 
+      pdq(0,0,0) + PDQ(0,0,0))) # esto es como un error
+
+
+real_ajustado1<-diff_tsibble%>%
+  left_join(fitted(Modelo_serie_diff,by=index))%>%
+  select(-.model) 
+
+real_ajustado1 %>%
+  autoplot() +
+  geom_line(data=real_ajustado1,aes(y=logdiff_air,colour="real"))+
+  geom_line(data=real_ajustado1,aes(y=.fitted,colour="ajustado"))+
+  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustado" = "red"))
+
+# Ajuste Dummy
+
+Modelo_serie_diff_Dummy<-diff_tsibble|>model(
+  DummyAirdiff=ARIMA(logdiff_air~season()+pdq(0, 0, 0) + PDQ(0, 0, 0))
+  
+)
+
+Modelo_serie_diff_Dummy<-diff_tsibble%>%
+  left_join(fitted(Modelo_serie_diff,by=index))%>%
+  select(-.model) 
+
+Modelo_serie_diff_Dummy %>%
+  autoplot() +
+  geom_line(data=Modelo_serie_diff_Dummy,aes(y=logdiff_air,colour="real"))+
+  geom_line(data=Modelo_serie_diff_Dummy,aes(y=.fitted,colour="ajustado"))+
+  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustado" = "red"))
+# Varios modelos la mismo tiempo
+
+
+# fable nos deja ver el ajuste con diferentes modelos
+ajuste_final_models<-diff_tsibble%>%model(
+  Fourier1Airdiff=ARIMA(logdiff_air~fourier(K=1)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+  Fourier2Airdiff=ARIMA(logdiff_air~fourier(K=2)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+  Fourier3Airdiff=ARIMA(logdiff_air~fourier(K=3)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+  DummyAirdiff=ARIMA(logdiff_air~season()+pdq(0, 0, 0) + PDQ(0, 0, 0))
+)
+
+glance(ajuste_final_models)
+
+ajuste_final_models %>%
+  select(Fourier1Airdiff)%>%coef()
+
+Modelo_serie_diff_models<-diff_tsibble %>%
+  left_join(fitted(ajuste_final_models)|>group_by(.model)%>%
+              pivot_wider(names_from = .model, values_from = .fitted))
+
+Modelo_serie_diff_models %>%
+  autoplot() +
+  geom_line(data=Modelo_serie_diff_models,
+            aes(y=logdiff_air,colour="real"))+
+  geom_line(data=Modelo_serie_diff_models,
+            aes(y=Fourier1Airdiff,colour="ajustadoFourier1"))+
+  geom_line(data=Modelo_serie_diff_models,
+            aes(y=Fourier2Airdiff,colour="ajustadoFourier2"))+ 
+  geom_line(data=Modelo_serie_diff_models,
+            aes(y=Fourier3Airdiff,colour="ajustadoFourier3"))+
+  geom_line(data=Modelo_serie_diff_models,
+            aes(y=DummyAirdiff,colour="ajustadoDummy")) +
+  scale_color_manual(name = "real/ajustado", 
+                     values = c("real" = "black", "ajustadoFourier1" = "red",
+                                "ajustadoFourier2" = "blue","ajustadoFourier3"="green",
+                                "ajustadoDummy"="yellow"))
 
 
 

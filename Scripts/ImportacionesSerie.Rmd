@@ -1,0 +1,351 @@
+---
+title: "Importaciones Colombianas via maritima"
+author: "Sebastian Gil, Cesar Prieto, Gabriel Peña"
+output: 
+rmdformats::readthedown:
+  self_contained: true
+  thumbnails: true
+  lightbox:
+  true gallery: false
+  highlight: tango
+  code_folding: .hide
+---
+
+rmdformats::downcute: self_contained: true thumbnails: true lightbox: true gallery: false highlight: .readthedown
+
+```{r setup, include=FALSE}
+
+library(readxl)
+library(readr)
+importaciones <- read.csv("C:/Users/gabop/OneDrive/U10/10ma/BasesDatosSeries/Series-de-Tiempo/Datos/Importaciones.csv")[1:120,]
+```
+
+```{r librerias, include=FALSE}
+library(forecast)
+library(MASS)
+library(tidyverse)
+library(lubridate)
+library(timetk)
+library(zoo)
+library(tsibble)
+library(dplyr)
+library(feasts)
+library(fable)
+library(astsa)
+library(nonlinearTseries)
+library(tseriesChaos)
+library(fabletools)
+library(TSA)
+library(VGAM)
+library(car)
+```
+
+## Contexto
+
+Esta serie consta del valor FOB en dólares de las importaciones que llegan a los puertos de Colombia vía marítima y su destino final es la ciudad de Bogotá, en el periodo transcurrido entre enero del 2012 hasta diciembre de 2021, la serie es de tipo **mensual**.
+
+**Definición:** El valor FOB en dólares de la mercancía, es valor de la mercancía en el momento que se carga a bordo del medio de transporte, en este caso el marítimo.
+
+La serie consta de 120 observaciones, lo que corresponde a los 10 transcurridos desde el 2012 hasta el 2021
+
+```{r grafíco1}
+# 1.000'000.000
+vafodo <- ts(importaciones[,3], start = c(2012, 01), frequency =12)/1000000000
+plot(vafodo, ylab = "Miles de millones de dólares", main = "Valor FOB", lw =2)
+
+```
+
+Visualmente vemos que la serie presenta una **tendencia**, la cual parece ser creciente con el tiempo. El rango de valores que toma la variable se va haciendo cada vez mayor (**heteroscedasticidad**).
+
+# 1. Parte descriptiva
+
+## 1.1 Estabilización de la varianza
+
+### Transformación de Box-Cox
+
+```{r estabilización de la varianza 2}
+serie <- vafodo
+a <- MASS::boxcox(lm(serie ~ 1), seq(-1, 1, length = 50))
+
+BC.m <- a$x[which.max(a$y)]
+BC.f <- forecast::BoxCox.lambda(serie, method = "loglik", 
+                        lower = -1,
+                        upper = 1) 
+# Transformación logarítmica 
+lserie <- log(vafodo)
+a <- MASS::boxcox(lm(lserie ~ 1), seq(-2, 2, length = 50))
+
+BC.ml <- a$x[which.max(a$y)]
+BC.fl <- forecast::BoxCox.lambda(lserie, method = "loglik", 
+                        lower = -2,
+                        upper = 2) 
+
+c(BC.f, BC.fl, BC.m, BC.ml)
+```
+
+En el primer gráfico podemos ver que el IC para $\lambda$ no captura al 1, además el valor de $\lambda$ para estabilizar la varianza es -0.25, por tanto usaremos $\lambda =0$ para estabilizar la varianza. En el segundo gráfico ya podemos ver esta transformación logarítmica aplicada, ahora en el IC está incluido el 1 y el $\lambda$ que estabiliza la varianza es -0.2.
+
+## 1.2 Estimación de la tendencia (lineal)
+
+```{r Estimación de la tendencia}
+fit_lserie <- lm(lserie ~time(lserie), na.action = NULL)
+summary(fit_lserie)
+
+# Grafico
+plot(lserie, lw = 2, main = "Valor FOB en escala log", ylab = "Log de miles de millones de dólares")
+abline(fit_lserie, col = "blue", lw = 2)
+
+# Eliminando la tendencia
+lserie.sin.tend <- lserie - predict(fit_lserie)
+plot(lserie.sin.tend, main = "Valor FOB en escala log sin tendencia", lw =2)
+
+acf(lserie, lag.max = length(lserie))
+acf(lserie.sin.tend, lag.max = length(lserie.sin.tend))
+```
+
+La estimación de la tendencia por medio de una regresión lineal simple nos da los parámetros $\hat{\beta}_0$ y $\hat{\beta}_1$ significativos, sin embargo al observar la gráfica tenemos que una regresión lineal simple no es una forma óptima de eliminar la tendencia.
+
+## 1.3 Promedio móvil
+
+```{r promedio móvil}
+descomposicion_lserie <- decompose(lserie)
+plot(descomposicion_lserie)
+```
+
+Como se vio en el punto anterior los datos no presentan una tendencia del todo lineal, además no se veian indicios de estacionalidad, por lo que es necesario aplicar el filtro de promedio móvil. Al aplicarlo podemos ver que la tendencia definitivamente no es lineal, la componente residual no muestra un comportamiento estacional.
+
+## 1.4 Tendencia desde el STL
+
+En el primer gráfico se hizo un ajuste STL sin ajustar los parámetros, para el segundo se ajustó un polinomio de grado 2, el cual se ajusta mejor que la anterior.
+
+```{r tendencia desde el stl, message=F, warning=F}
+indice_lserie <- as.Date(as.yearmon(tk_index(lserie)))
+indice_lserie1 <- yearmonth(as.yearmon(tk_index(lserie)))
+
+# Forma alternativa de extraer el indice
+df_lserie <- data.frame(Fecha = indice_lserie, 
+                              lserie = as.matrix(lserie))
+tibble_lserie <- tibble(df_lserie)
+tsibble_lserie <- as_tsibble(df_lserie)
+
+# Primera aproximación al ajuste STL 
+tsibble_lserie %>%
+  timetk::plot_time_series(Fecha, lserie,
+                           .interactive = TRUE,
+                           .plotly_slider = TRUE)
+# Ajuste STL 
+tibble_lserie %>%  
+  mutate(lserie_ajust = smooth_vec(lserie,
+                                   span = 0.2,
+                                   degree =2)
+)
+
+# Ajuste STL moviendo los parámetros
+tsibble_lserie %>% mutate(
+  lserie_ajus = smooth_vec(lserie, span = 0.2, degree = 2)) %>% 
+  ggplot(aes(Fecha, lserie)) + 
+  geom_line(size =1.05)+
+  geom_line(aes(y = lserie_ajus), color = "blue", size =1.05) +
+  theme_bw()
+
+tsibble_lserie %>% mutate(
+  lserie_ajus = smooth_vec(lserie, span = 0.2, degree = 2), 
+  dlserie_ajus = lserie - lserie_ajus) %>% 
+  ggplot(aes(Fecha, dlserie_ajus)) + 
+  geom_line(size =1.05)+
+  theme_bw()
+
+
+```
+
+### 1.4.1 STL Tendencia y estacionalidad
+
+```{r stl tendencia y estacionalidad, message=F, warning=F}
+tsibble_lserie <- as_tsibble(lserie)
+
+tsibble_lserie %>% 
+  model(
+    STL(value ~ trend() + 
+          season(window = "periodic"),
+        robust = TRUE)) %>% 
+  components() %>% 
+  autoplot() +
+  theme_minimal()
+
+```
+
+## 1.5 Diferencia Ordinaria
+
+```{r diferencia ordinaria, warning=F}
+# escala log
+tsibble_lserie|>mutate(
+  diff_lserie = tsibble::difference(value, lag = 1, 
+                                     differences = 1))|>
+  autoplot(.vars = diff_lserie, size = 1.05) + 
+  labs(subtitle = "Cambios en escala log del valor FOB") +
+  theme_bw()
+
+tsibble_lserie <- tsibble_lserie|>mutate(
+  diff_lserie = tsibble::difference(value, lag = 1,
+                                      difference = 1))
+
+# Diferenciando basado en el objeto tibble
+tibble_lserie %>% 
+  mutate(diff_lserie = lserie - lag(lserie)) %>% 
+  plot_time_series(Fecha, diff_lserie)
+
+tibble_lserie <- tibble_lserie %>% 
+  mutate(diff_lserie = lserie - lag(lserie))
+
+dlserie <- diff(lserie)
+```
+
+## 1.6 Relaciones no lineales dispersión
+
+```{r Relaciones no lineales}
+par(mar = c(3,2,3,2))
+astsa::lag1.plot(dlserie, 12, corr = T)
+```
+
+## 1.7 ACF
+
+El acf no parece sugerir una componente estacional.
+
+```{r}
+acf(dlserie, lag.max = 50, main = "Serie diferenciada y con logaritmo del valor FOB")
+```
+
+## 1.8 Índice AMI
+
+```{r indice ami, out.width="50%", fig.align = 'center'}
+par(mar = c(3,2,3,2))
+astsa::lag1.plot(lserie, 12, corr = F)
+nonlinearTseries::mutualInformation(lserie, lag.max = 100,
+                                    n.partitions = 50, 
+                                    units = "Bits",
+                                    do.plot = TRUE)
+```
+
+## 1.9 Exploración de la Estacionalidad
+
+```{r exploración de la estacionalidad, out.width="50%", fig.align = 'center'}
+monthplot(dlserie)
+
+
+tibble_lserie %>%na.omit()|>
+    mutate(
+        Mes = str_c("", as.character(lubridate::month(Fecha,label=TRUE)))
+    ) %>%
+    plot_time_series(
+        .date_var = Fecha,
+        .value = diff_lserie,
+        .facet_vars = Mes,
+        .facet_ncol = 4, 
+        .color_var = Mes, 
+        .facet_scales = "fixed",
+        .interactive = FALSE,
+        .legend_show = FALSE,
+        .smooth = FALSE
+    )
+
+ggseasonplot(dlserie)
+```
+
+### 1.9.1 Gráfico de cajas
+
+```{r gráfico de cajas }
+tibble_lserie %>%
+  na.omit() %>% 
+  plot_seasonal_diagnostics(.date_var = Fecha,.value = diff_lserie,
+                            .feature_set = c("month.lbl"),.geom="boxplot")
+
+ggplot(tibble_lserie %>%
+         na.omit()|>
+    mutate(Mes = str_c("Mes ", as.character(lubridate::month(Fecha)))),
+    aes(x = diff_lserie)) +
+      geom_density(aes(fill = Mes)) +
+      ggtitle("Estimación de la densidad vía Kernel por mes") +
+      facet_grid(rows = vars(as.factor(Mes))) 
+```
+
+### 1.9.2 Periodograma
+
+```{r periodograma gráfico}
+Periodgramadlserie  <- spectrum(as.numeric(dlserie),log='no', main = "Periodogram")
+ubicacionlserie  <- which.max(Periodgramadlserie$spec)
+abline(v = ubicacionlserie, , col = 'darkred', lty = 2)
+sprintf("El valor de la frecuencia donde se máximiza el periodograma para la serie es: %s",Periodgramadlserie$freq[ubicacionlserie])
+
+sprintf("El periodo correspondiente es aproximadamente: %s",1/Periodgramadlserie$freq[ubicacionlserie])
+```
+
+### 1.9.3 Ajuste de la estacionalidad con componentes de Fourier y Dummy
+
+```{r fourier y dummy, warning=F, comment=F, message=F }
+tsibble_serie <- as_tsibble(serie)
+
+diff_tsibble <- tsibble_serie|>
+  mutate(logdiff_serie = difference(log(value)))|>
+  select(logdiff_serie)
+
+# Explore diferentes valores de K
+Modelo_serie_diff<-diff_tsibble|>
+  model(Fourier1seriediff = ARIMA(logdiff_serie ~ fourier(K=2) +
+                                pdq(0, 0, 0) + PDQ(0, 0, 0)))
+
+real_ajustado1 <- diff_tsibble %>%
+  left_join(fitted(Modelo_serie_diff,by=index)) %>%
+  select(-.model) 
+
+real_ajustado1 %>%
+  autoplot() +
+  geom_line(data=real_ajustado1,
+            aes(y=logdiff_serie, colour="real"))+
+  geom_line(data=real_ajustado1,
+            aes(y=.fitted, colour="ajustado"))+
+  scale_color_manual(name = "real/ajustado", 
+                     values = c("real" = "black", "ajustado" = "red")) +
+  theme_minimal()
+
+
+# Ajuste Dummy
+
+Modelo_serie_diff_Dummy<-diff_tsibble|>model(
+  DummyAirdiff=ARIMA(logdiff_serie~season()+pdq(0, 0, 0) + PDQ(0, 0, 0))
+  
+)
+
+Modelo_serie_diff_Dummy<-diff_tsibble%>%left_join(fitted(Modelo_serie_diff,by=index))%>%select(-.model) 
+
+Modelo_serie_diff_Dummy %>%
+  autoplot() +
+  geom_line(data=Modelo_serie_diff_Dummy,aes(y=logdiff_serie,colour="real"))+
+  geom_line(data=Modelo_serie_diff_Dummy,aes(y=.fitted,colour="ajustado"))+
+  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustado" = "red")) + theme_minimal()
+# Varios modelos la mismo tiempo
+
+ajuste_final_models<-diff_tsibble%>%model(
+ Fourier1Airdiff=ARIMA(logdiff_serie~fourier(K=1)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+ Fourier2Airdiff=ARIMA(logdiff_serie~fourier(K=2)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+ Fourier3Airdiff=ARIMA(logdiff_serie~fourier(K=3)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+DummyAirdiff=ARIMA(logdiff_serie~season()+pdq(0, 0, 0) + PDQ(0, 0, 0))
+                                        )
+
+glance(ajuste_final_models)
+
+Modelo_serie_diff_models<-diff_tsibble%>%
+  left_join(fitted(ajuste_final_models)|>
+              group_by(.model)%>%
+              pivot_wider(names_from = .model, values_from = .fitted))
+
+Modelo_serie_diff_models %>%
+  autoplot() +
+  geom_line(data=Modelo_serie_diff_models,aes(y=logdiff_serie,colour="real"))+
+  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier1Airdiff,colour="ajustadoFourier1"))+
+geom_line(data=Modelo_serie_diff_models,aes(y=Fourier2Airdiff,colour="ajustadoFourier2"))+ 
+  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier3Airdiff,colour="ajustadoFourier3"))+
+  geom_line(data=Modelo_serie_diff_models,aes(y=DummyAirdiff,colour="ajustadoDummy")) +
+  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustadoFourier1" = "red","ajustadoFourier2" = "blue","ajustadoFourier3"="green","ajustadoDummy"="yellow"))
+```
+
+### 
