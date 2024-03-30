@@ -20,7 +20,7 @@ output:
 
 library(readxl)
 library(readr)
-importaciones <- read.csv("C:/Users/gsgil/Documents/sebastiangils/Universidad/Semestre_10/Series/Proyecto/Series-de-Tiempo/Datos/Importaciones.csv")[1:120,]
+  importaciones <- read.csv("C:/Users/gsgil/Documents/sebastiangils/Universidad/Semestre_10/Series/Proyecto/Datos/Importaciones.csv")[1:120,]
 ```
 
 ```{r librerias, include=FALSE}
