@@ -5,7 +5,7 @@
 # - Precio de la carga al momento de ser transportada via maritima
 
 # Grupo 2
-# Script elborado por Sebastian Gil, Cesar Prieto, Gabriel Peña
+# Script elaborado por Sebastian Gil, Cesar Prieto, Gabriel Peña
 
 
 # Librerías y directorio --------------------------------------------------
@@ -72,6 +72,13 @@ library(fabletools)
 library(TSA)
 
 
+library(tidyverse)
+library(tsibble)
+library(fable)
+library(fabletools)
+library(TSA)
+
+
 
 # Descriptivo -------------------------------------------------------------
 # vafodo
@@ -101,12 +108,33 @@ a <- MASS::boxcox(lm(serie ~ 1), seq(-2, 7, length = 50))
 a$x[which.max(a$y)]
 abline(v = a$x[which.max(a$y)], col= "red")
 
+<<<<<<< HEAD
 # Graficar la serie original
 plot(serie, type = "l", col = "black", lwd = 2, main = "Gráfica con Box-Cox")
 # Graficar BoxCox con lambda = 0.75
 plot(BoxCox(serie, lambda = BC.f), col = "black", lwd = 2,
      ylim = c(2, 3), main = "Gráfica con Box-Cox", ylab = "")
 lines(BoxCox(serie, lambda = BC.m), col = "blue", lwd = 2)
+=======
+
+plot(serie)
+plot(BoxCox(serie, lambda = -0.1))
+plot(BoxCox(serie, lambda = a$x[which.max(a$y)]))
+
+# Graficar la serie original
+plot(serie, type = "l", col = "black", lwd = 2, main = "Gráfica con Box-Cox")
+# Graficar BoxCox con lambda = 0.75
+plot(BoxCox(serie, lambda = -0.1), col = "red", lwd = 2,
+     ylim = c(2.4, 6.3), main = "Gráfica con Box-Cox", ylab = "")
+# Graficar BoxCox con lambda = 0.4545
+lines(BoxCox(serie, lambda = a$x[which.max(a$y)]),
+      col = "green", lwd = 2, xlab = "")
+
+
+# Agregar leyenda
+legend("topright", legend = c("Lambda = -0.1", "Lambda = 0.0909"), 
+       col = c("red", "green"), lwd = 2)
+>>>>>>> 4beb33b8eaa9a52e1a1ce2832ca447d170a0f11e
 
 min(serie)
 serie

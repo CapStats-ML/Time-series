@@ -1,21 +1,27 @@
 ---
-title: "Importaciones Colombianas via maritima"
-author: "Sebastian Gil, Cesar Prieto, Gabriel Peña"
+title: "Importaciones Colombianas vía marítima"
+author: "Sebastian Gil, Gabriel Peña, Cesar Prieto"
 
-output:
-  rmdformats::downcute:
+date: "`r Sys.Date()`"
+
+output: 
+  rmdformats::readthedown:
     self_contained: true
     thumbnails: true
     lightbox: true
     gallery: false
     highlight: tango
+    code_folding: hide
 ---
-
 ```{r setup, include=FALSE}
 
 library(readxl)
 library(readr)
+
 importaciones <- read.csv("C:/Users/gabop/OneDrive/U10/10ma/BasesDatosSeries/Series-de-Tiempo/Datos/Importaciones.csv")[1:120,]
+
+#importaciones <- read.csv("C:/Users/gsgil/Documents/sebastiangils/Universidad/Semestre_10/Series/Proyecto/Datos/Importaciones.csv")[1:120,]
+
 ```
 
 ```{r librerias, include=FALSE}
@@ -54,11 +60,9 @@ plot(vafodo, ylab = "Miles de millones de dólares", main = "Valor FOB", lw =2)
 ```
 
 Visualmente vemos que la serie presenta una **tendencia**, la cual parece ser creciente con el tiempo. El rango de valores que toma la variable se va haciendo cada vez mayor (**heteroscedasticidad**).
-
-# 1. Parte descriptiva
+# 1. Parte descriptiva 
 
 ## 1.1 Estabilización de la varianza
-
 ### Transformación de Box-Cox
 
 ```{r estabilización de la varianza 2}
@@ -81,11 +85,19 @@ BC.fl <- forecast::BoxCox.lambda(lserie, method = "loglik",
 c(BC.f, BC.fl, BC.m, BC.ml)
 ```
 
-Los valores de $\lambda$ obtenidos por el método de Box-Cox tanto en el paquete MASS, como en el paquete forecast, son diferentes de 1 e inferiorese a 0, además el intervalo de confianza para $\lambda$ no captura el 1, por lo que se usará la transformación logarítmica. Una vez aplicada, notamos que el intervalo de confianza caputra al 1, por otra parte los valores de $\lambda$ siguen siendo inferiores a 0.
+Los valores de $\lambda$ obtenidos por el método de Box-Cox tanto en el paquete 
+MASS, como en el paquete forecast, son diferentes de 1 e inferiorese a 0, además
+el intervalo de confianza para $\lambda$ no captura el 1, por lo que se usará la
+transformación logarítmica. Una vez aplicada, notamos que el intervalo de confianza
+captura al 1, por otra parte los valores de $\lambda$ siguen siendo inferiores a 0.
 
 ### 1.2 Estimación de la tendencia
 
-En el primer gráfico podemos ver que el IC para $\lambda$ no captura al 1, además el valor de $\lambda$ para estabilizar la varianza es -0.25, por tanto usaremos $\lambda =0$ para estabilizar la varianza. En el segundo gráfico ya podemos ver esta transformación logarítmica aplicada, ahora en el IC está incluido el 1 y el $\lambda$ que estabiliza la varianza es -0.2.
+En el primer gráfico podemos ver que el IC para $\lambda$ no captura al 1, además 
+el valor de $\lambda$ para estabilizar la varianza es -0.25, por tanto usaremos
+$\lambda =0$ para estabilizar la varianza. En el segundo gráfico ya podemos ver 
+esta transformación logarítmica aplicada, ahora en el IC está incluido el 1 y el
+$\lambda$ que estabiliza la varianza es -0.2.
 
 ### 1.2.1 Estimación de la tendencia (lineal)
 
@@ -105,14 +117,17 @@ acf(lserie, lag.max = length(lserie))
 acf(lserie.sin.tend, lag.max = length(lserie.sin.tend))
 ```
 
-La estimación de la tendencia por medio de una regresión lineal simple nos da los parámetros $\hat{\beta}_0$ y $\hat{\beta}_1$ significativos, sin embargo al observar la gráfica tenemos que una regresión lineal simple no es una forma óptima de eliminar la tendencia.
+La estimación de la tendencia por medio de una regresión lineal simple nos da los
+parámetros $\hat{\beta}_0$ y $\hat{\beta}_1$ significativos, sin embargo al
+observar la gráfica tenemos que una regresión lineal simple no es una forma óptima
+de eliminar la tendencia.
 
 ### 1.2.2 Promedio móvil
-
 ```{r promedio móvil}
 descomposicion_lserie <- decompose(lserie)
 plot(descomposicion_lserie)
 ```
+
 
 ### 1.2.3 Tendencia desde el STL
 
@@ -131,11 +146,11 @@ tibble_lserie <- tibble(df_lserie)
 tsibble_lserie <- as_tsibble(df_lserie)
 
 # Primera aproximación al ajuste STL 
+
 tsibble_lserie %>%
   timetk::plot_time_series(Fecha, lserie,
                            .interactive = TRUE,
                            .plotly_slider = TRUE)
-#<<<<<<< HEAD
 
 # Ajuste STL 
 # escala log
@@ -143,17 +158,15 @@ tibble_lserie %>%
   mutate(lserie_ajust = smooth_vec(lserie,
                                    span = 0.3,
                                    degree = 2))
-#=======
+
 # Ajuste STL 
 tibble_lserie %>%  
   mutate(lserie_ajust = smooth_vec(lserie,
                                    span = 0.2,
-#>>>>>>> main
                                    degree =2)
 )
 
 # Ajuste STL moviendo los parámetros
-
 # escala log
 tsibble_lserie %>% mutate(
   lserie_ajus = smooth_vec(lserie, span = 0.3, degree = 2)) %>% 
@@ -161,6 +174,7 @@ tsibble_lserie %>% mutate(
   geom_line(size =1.05)+
   geom_line(aes(y = lserie_ajus), color = "blue", size =1.05) +
   theme_bw()
+
 
 tsibble_lserie %>% mutate(
   lserie_ajus = smooth_vec(lserie, span = 0.2, degree = 2)) %>% 
@@ -176,9 +190,6 @@ tsibble_lserie %>% mutate(
   ggplot(aes(Fecha, dlserie_ajus)) + 
   geom_line(size =1.05)+
   theme_bw()
-
-
-
 ```
 
 ### 1.2.4 STL Tendencia y estacionalidad
@@ -239,6 +250,7 @@ pacf(dlserie, 48)
 acf(dlserie, lag.max = 50, main = "Serie diferenciada y con logaritmo del valor FOB")
 ```
 El acf no parece sugerir una componente estacional.
+
 ## 1.6 Índice AMI
 
 ```{r indice ami}
@@ -258,8 +270,6 @@ nonlinearTseries::mutualInformation(dlserie, lag.max = 100,
 ```
 
 ## 1.7 Exploración de la Estacionalidad
-
-
 
 ```{r exploración de la estacionalidad}
 monthplot(dlserie)
