@@ -32,6 +32,7 @@ data <- read_delim("Datos/G_ARGOS.csv", delim = ";", escape_double = FALSE,
                    trim_ws = TRUE)
 
 colnames(data)
+colnames(data) <- c("Fecha","Ultimo","Apertura","Maximo","Minimo","Vol","% var")
 head(data)
 
 summary(data)
@@ -39,21 +40,18 @@ summary(data)
 attach(data)
 par(mfrow = c(2,2))
 plot(x = Fecha , y = Apertura ,type = "l", main = 'Serie de tiempo variable OPEN')
-plot(x = Fecha , y = Último , type = "l", main = 'Serie de tiempo variable CLOSE')
-plot(x = Fecha , y = Máximo , type = "l", main = 'Serie de tiempo variable HIGH')
-plot(x = Fecha , y = Mínimo , type = "l", main = 'Serie de tiempo variable LOW')
+plot(x = Fecha , y = Ultimo , type = "l", main = 'Serie de tiempo variable CLOSE')
+plot(x = Fecha , y = Maximo , type = "l", main = 'Serie de tiempo variable HIGH')
+plot(x = Fecha , y = Minimo , type = "l", main = 'Serie de tiempo variable LOW')
 par(mfrow = c(1,1))
 
 ################################################################################
 ############ Análisis descriptivo y exploratorio de la serie ###################
-
 Serie <- data[,c(1,2)]
 head(Serie)
 summary(Serie)
 
 Apertura <- ts(Serie[,2], start = c(2014,11,07), frequency = 7)
-
-attach(Serie)
 plot(Apertura, type = "l", main = 'Serie de tiempo OPEN' )
 
 ### Estabilizacion de la varianza
@@ -249,8 +247,6 @@ tsibble_lserie %>%
 
 ## Diferencia Ordinaria -------------------------------------------
 # Usando diferencia ordinaria
-
-
 tsibble_serie|>mutate(
   diff_serie = tsibble::difference(value, lag = 1, 
                                    differences = 1))|>
@@ -333,6 +329,7 @@ tsibble_lserie %>% na.omit()|>gg_subseries(diff_lserie, period = 12)
 ## Gráfico de cajas --------------------------REVISAR OBJETO 
 # basado en el objeto tibble
 
+## NO EJECUTAR LO SIGUIENTE
 tibble_sserie %>% na.omit() %>% 
   plot_seasonal_diagnostics(
     .date_var = Fecha,
@@ -370,7 +367,7 @@ ggplot(tibble_logserie %>%na.omit()|>
 
 
 ## Periodograma -----------------------------------------------------
-
+# YA PUEDES EJECUTAR DE NUEVO
 spectrum(as.numeric(dserie),log='no')
 
 PeriodgramadAperturas=spectrum(as.numeric(dserie),log='no')
@@ -489,37 +486,3 @@ Modelo_serie_diff_models %>%
                                 "ajustadoFourier2" = "blue","ajustadoFourier3"="green",
                                 "ajustadoDummy"="yellow"))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Esto es una línea de prueba, de SEBAS GIL
