@@ -5,7 +5,7 @@
 # - Precio de la carga al momento de ser transportada via maritima
 
 # Grupo 2
-# Script elaborado por Sebastian Gil, Cesar Prieto, Gabriel Peña
+# Script elaborado por Cesar Prieto, Gabriel Peña y Sebastian Gil
 
 
 # Librerías y directorio --------------------------------------------------
