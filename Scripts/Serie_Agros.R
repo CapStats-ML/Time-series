@@ -5,7 +5,7 @@
 # - Precio de la acción medido en pesos 
 
 # Grupo 2
-# Script elaborado por Sebastian Gil, Cesar Prieto, Gabriel Peña
+# Script elaborado por Cesar Prieto, Gabriel Peña, Sebastian Gil
 
 
 # Librerías y directorio ----
@@ -16,6 +16,7 @@ library(lubridate)
 library(timetk)
 library(zoo)
 library(tsibble)
+library(plotly)
 library(dplyr)
 library(feasts)
 library(fable)
@@ -47,11 +48,17 @@ par(mfrow = c(1,1))
 
 ################################################################################
 ############ Análisis descriptivo y exploratorio de la serie ###################
+
 Serie <- data[,c(1,2)]
 head(Serie)
 summary(Serie)
 
-Apertura <- ts(Serie[,2], start = c(2014,11,07), frequency = 7)
+Serie <- Serie[order(Serie$Fecha), ] 
+
+Apertura <- ts(Serie$Ultimo, start = c(year(min(Serie$Fecha)), as.numeric(format(min(Serie$Fecha), "%j"))),
+               end = c(year(max(Serie$Fecha)), as.numeric(format(max(Serie$Fecha), "%j"))),
+               frequency = 365)  # La frecuencia 365 indica datos diarios
+
 plot(Apertura, type = "l", main = 'Serie de tiempo OPEN' )
 
 ### Estabilizacion de la varianza
@@ -59,50 +66,42 @@ lambda_optimo <- forecast::BoxCox.lambda(Apertura, method = "loglik", lower = -2
 print(lambda_optimo)
 
 # Aplicar Box-Cox solo a la columna 'Último'
-Serie$BoxCox <- BoxCox(Apertura, lambda = 1.7)
+BoxCox <- BoxCox(Apertura, lambda = 1.7)
 
 # Graficar de la comparacion de las series
 par(mfrow = c(1,2))
-plot(x = Fecha, y = Apertura, type = "l", main = 'Serie de tiempo OPEN' )
-plot(x = Fecha, y = Serie$BoxCox, type = "l", main = 'Serie de tiempo OPEN-BoxCox')
+plot(Apertura, type = "l", main = 'Serie de tiempo \n Apertura' )
+plot(BoxCox, type = "l", main = 'Serie de tiempo \n Apertura-BoxCox')
 par(mfrow = c(1,1))
 
 # Coincide con el anterior valor de la varianza
 MASS::boxcox(lm(Apertura ~1), seq(0, 4.5, length = 50))
-a <- MASS::boxcox(lm(Apertura ~1), seq(0, 4.5, length = 50))
-
-a$x[which.max(a$y)]
-plot(a, lambda = a$x[which.max(a$y)])
-abline(v = a$x[which.max(a$y)], col= "red")
 
 logApertura <- log(Apertura)
 
 par(mfrow = c(1,2))
-plot(x = Fecha, y = logApertura, type = "l", main = 'Serie de tiempo Log-Apertura' )
-plot(x = Fecha, y = Apertura, type = "l", main = 'Serie de tiempo Apertura')
+plot(logApertura, type = "l", main = 'Serie de tiempo Log-Apertura' )
+plot(Apertura, type = "l", main = 'Serie de tiempo Apertura')
 par(mfrow = c(1,1))
 
 ## Estimación de la tendencia -----
-fit_Apertura <- lm (Apertura ~ time(Apertura), na.action = NULL)
+
+fit_Apertura <- lm(Apertura ~ time(Apertura), na.action = NULL)
 summary(fit_Apertura)
 
 # modelo en escala log
-fit_logApertura <- lm (logApertura ~ time(logApertura), na.action = NULL)
-summary(fit_Apertura)
-
-# Regresión paramétrica no hay tendencia lineal
+fit_logApertura <- lm(logApertura ~ time(logApertura), na.action = NULL)
+summary(fit_logApertura)  
 
 par(mfrow = c(1, 2))
 # Primer panel: Gráfico de la serie original
-plot(Serie$Fecha, Apertura, type = "l", ylab = "Valor en escala original")
-lines(Serie$Fecha, predict(fit_Apertura), col = "red")
-
+plot(Apertura, type = "l", ylab = "Valor en escala original")
+lines(predict(fit_Apertura), col = "red")
 
 # Segundo panel: Gráfico de la serie en escala logarítmica
-plot(Serie$Fecha, logApertura, type = "l", ylab = "Valor en escala log")
-lines(Serie$Fecha, predict(fit_logApertura), col = "red")
+plot(logApertura, type = "l", ylab = "Valor en escala log")
+lines(predict(fit_logApertura), col = "red")
 par(mfrow = c(1, 1))
-
 
 # Eliminamos la tendencia con la predicción de la recta
 # se hace con la diferencia de la tend log, y el mod ajustdo
@@ -112,24 +111,16 @@ Apertura.sin.tend <- Apertura- predict(fit_Apertura)
 # serie sin tendencia en escala log
 logApertura.sin.tend <- logApertura- predict(fit_logApertura)
 
-plot(x= Fecha, y = Apertura.sin.tend, type = "l", main = "Serie Log sin tendencia")
+plot(Apertura.sin.tend, type = "l", main = "Serie sin tendencia")
 acf(Apertura, lag.max = length(Apertura))
 pacf(Apertura, lag.max = length(Apertura))
 
-plot(x = Fecha, y = Apertura.sin.tend, type = "l", main = "Apertura sin tendencia")
-acf(Apertura.sin.tend, lag.max = length(Apertura.sin.tend)) 
-pacf(Apertura.sin.tend, lag.max = length(Apertura.sin.tend)) 
-
-
-plot(x= Fecha, y = logApertura.sin.tend, main = "Serie Log sin tendencia")
-acf(logApertura, lag.max = length(logApertura))
-pacf(logApertura, lag.max = length(logApertura))
+plot(logApertura.sin.tend, type = "l", main = "Apertura Log sin tendencia")
 acf(logApertura.sin.tend, lag.max = length(logApertura.sin.tend)) 
 pacf(logApertura.sin.tend, lag.max = length(logApertura.sin.tend)) 
 
 
 ## Promedio Móvil -----
-
 
 descomposicion_serie <- decompose(Apertura)
 plot(descomposicion_serie)
@@ -137,20 +128,20 @@ plot(descomposicion_serie)
 descomposicion_lserie <- decompose(logApertura)
 plot(descomposicion_lserie)
 
-## Tendencia de STL -----
+## Tendencia de STL ----- QUEDASTE AQUIIIIIIIIIII
 
-indice_serie <- as.Date(as.yearmon(tk_index(Apertura)))
+indice_serie <- index(as_tibble(Apertura))
 indice_serie1 <- yearmonth(as.yearmon(tk_index(Apertura)))
 
 indice_logserie <- as.Date(as.yearmon(tk_index(logApertura)))
 indice_logserie1 <- yearmonth(as.yearmon(tk_index(logApertura)))
 
 #Forma alternativa de extraer el indice
-df_serie <- data.frame(Fecha = indice_serie, 
+df_serie <- data.frame(Fecha = time(Apertura, format = "YYYY-MM-DD"), 
                        serie = as.matrix(Apertura))
 str(df_serie)
 tibble_serie <- tibble(df_serie)
-tsibble_serie <- as_tsibble(df_serie)
+tsibble_serie <- as_tsibble(df_serie$serie, index = (df_serie$Fecha))
 
 # escala log
 df_logserie <- data.frame(Fecha = indice_logserie, 
