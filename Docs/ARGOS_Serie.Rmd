@@ -24,6 +24,7 @@ library(timetk)
 library(zoo)
 library(tsibble)
 library(dplyr)
+library(plotly)
 library(feasts)
 library(fable)
 library(tsibble)
@@ -37,7 +38,8 @@ library(readr)
 ```{r setup, include=FALSE}
 library(readxl)
 library(readr)
-data <- read_delim("C:/Users/gsgil/Documents/sebastiangils/Universidad/Semestre_10/Series/Proyecto/Datos/G_ARGOS.csv", delim = ";", escape_double = FALSE, 
+setwd("~/DOCUMENTOS PERSONAJES/CESAR/Series/Pro_Series/Series-de-Tiempo")
+data <- read_delim("Datos/G_ARGOS.csv", delim = ";", escape_double = FALSE, 
                    col_types = cols(Fecha = col_date(format = "%d/%m/%Y")), 
                    trim_ws = TRUE)
 colnames(data) <- c("Fecha","Ultimo","Apertura","Maximo","Minimo","Vol","% var")
