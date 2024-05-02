@@ -28,34 +28,47 @@ library(readxl)
 library(readr)
 
 # Importanción y reconocimiento de la base ----
-data <- read_delim("Datos/G_ARGOS.csv", delim = ";", escape_double = FALSE, 
-                   col_types = cols(Fecha = col_date(format = "%d/%m/%Y")), 
-                   trim_ws = TRUE)
 
-colnames(data)
-colnames(data) <- c("Fecha","Ultimo","Apertura","Maximo","Minimo","Vol","% var")
-head(data)
+G_ARGOS <- read_delim("Datos/G_ARGOS.csv", delim = ";", escape_double = FALSE,
+                      col_types = cols(Fecha = col_date(format = "%d/%m/%Y")), 
+                      trim_ws = TRUE)
 
-summary(data)
+str(G_ARGOS)
 
-attach(data)
+# Completar fechas faltantes  mediante la funcion zoo::na.locf
+
+FC <- data.frame(Fecha = seq(min(G_ARGOS$Fecha), max(G_ARGOS$Fecha), by = "1 day"))
+
+G_ARGOS <- merge(FC, G_ARGOS, by = "Fecha", all.x = TRUE)
+
+G_ARGOS$Último <- na.locf(G_ARGOS$Último)
+G_ARGOS$Apertura <- na.locf(G_ARGOS$Apertura)
+G_ARGOS$Máximo <- na.locf(G_ARGOS$Máximo)
+G_ARGOS$Mínimo <- na.locf(G_ARGOS$Mínimo)
+
+colnames(G_ARGOS) <- c("Fecha","Ultimo","Apertura","Maximo","Minimo")
+head(G_ARGOS)
+
+summary(G_ARGOS)
+
+attach(G_ARGOS)
 par(mfrow = c(2,2))
-plot(x = Fecha , y = Apertura ,type = "l", main = 'Serie de tiempo variable OPEN')
-plot(x = Fecha , y = Ultimo , type = "l", main = 'Serie de tiempo variable CLOSE')
-plot(x = Fecha , y = Maximo , type = "l", main = 'Serie de tiempo variable HIGH')
-plot(x = Fecha , y = Minimo , type = "l", main = 'Serie de tiempo variable LOW')
+plot(x = Fecha , y = Apertura ,type = "l", main = 'Serie de tiempo variable Apertura')
+plot(x = Fecha , y = Ultimo , type = "l", main = 'Serie de tiempo variable Ultimo')
+plot(x = Fecha , y = Maximo , type = "l", main = 'Serie de tiempo variable Maximo')
+plot(x = Fecha , y = Minimo , type = "l", main = 'Serie de tiempo variable Minimo')
 par(mfrow = c(1,1))
 
 ################################################################################
 ############ Análisis descriptivo y exploratorio de la serie ###################
 
-Serie <- data[,c(1,2)]
+Serie <- G_ARGOS[,c(1,3)]
 head(Serie)
 summary(Serie)
 
 Serie <- Serie[order(Serie$Fecha), ] 
 
-Apertura <- ts(Serie$Ultimo, start = c(year(min(Serie$Fecha)), as.numeric(format(min(Serie$Fecha), "%j"))),
+Apertura <- ts(Serie$Apertura, start = c(year(min(Serie$Fecha)), as.numeric(format(min(Serie$Fecha), "%j"))),
                end = c(year(max(Serie$Fecha)), as.numeric(format(max(Serie$Fecha), "%j"))),
                frequency = 365)  # La frecuencia 365 indica datos diarios
 
@@ -89,7 +102,6 @@ par(mfrow = c(1,1))
 fit_Apertura <- lm(Apertura ~ time(Apertura), na.action = NULL)
 summary(fit_Apertura)
 
-# modelo en escala log
 fit_logApertura <- lm(logApertura ~ time(logApertura), na.action = NULL)
 summary(fit_logApertura)  
 
@@ -103,12 +115,10 @@ plot(logApertura, type = "l", ylab = "Valor en escala log")
 lines(predict(fit_logApertura), col = "red")
 par(mfrow = c(1, 1))
 
-# Eliminamos la tendencia con la predicción de la recta
-# se hace con la diferencia de la tend log, y el mod ajustdo
+## Eliminamos la tendencia con la predicción de la recta se hace con la diferencia
+#   de la tend log, y el mod ajustdo.
 
 Apertura.sin.tend <- Apertura- predict(fit_Apertura)
-
-# serie sin tendencia en escala log
 logApertura.sin.tend <- logApertura- predict(fit_logApertura)
 
 plot(Apertura.sin.tend, type = "l", main = "Serie sin tendencia")
@@ -121,7 +131,6 @@ pacf(logApertura.sin.tend, lag.max = length(logApertura.sin.tend))
 
 
 ## Promedio Móvil -----
-
 descomposicion_serie <- decompose(Apertura)
 plot(descomposicion_serie)
 
