@@ -238,6 +238,10 @@ nonlinearTseries::mutualInformation(Diff_BoxCox, lag.max = 100,
                                     units = "Bits",
                                     do.plot = TRUE)
 
+# MAPAS DE CALOR
+
+TSstudio::ts_heatmap(Diff_BoxCox, padding = FALSE  ,
+                     title = "Mapa de calor - Apertura Dif Argos en bolsa dias año")
 
 
 # DETECCION DE ESTACIONALIDAD DE LA SERIE TRANSF Y DIFF  ----
