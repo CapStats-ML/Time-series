@@ -9,28 +9,11 @@
 
 
 # Librerías y directorio ----
+library(easypackages)
 
-library(zoo)
-library(TSA)
-library(MASS)
-library(readr)
-library(dplyr)
-library(fable)
-library(astsa)
-library(readxl)
-library(feasts)
-library(timetk)
-library(plotly)
-library(tibble)
-library(tsibble)
-library(forecast)
-library(tidyverse)
-library(lubridate)
-library(modeldata)
-library(fabletools)
-library(tseriesChaos)
-library(nonlinearTseries)
-
+libraries(c("zoo", "TSA", "MASS", "readr", "dplyr", "fable", "astsa", "readxl", "feasts", 
+           "timetk", "plotly", "tibble", "tsibble", "forecast", "tidyverse", "lubridate", 
+           "modeldata", "fabletools", "tseriesChaos", "nonlinearTseries"))
 
 
 # IMPORTACION Y RECONOCIMIENTO DE LA BASE ----
