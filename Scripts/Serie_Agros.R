@@ -13,7 +13,7 @@ library(easypackages)
 
 libraries(c("zoo", "TSA", "MASS", "readr", "dplyr", "fable", "astsa", "readxl", "feasts", 
            "timetk", "plotly", "tibble", "tsibble", "forecast", "tidyverse", "lubridate", 
-           "modeldata", "fabletools", "tseriesChaos", "nonlinearTseries"))
+           "modeldata", "fabletools", "tseriesChaos", "nonlinearTseries", "rsample", "modeltime", "parsnip"))
 
 
 # IMPORTACION Y RECONOCIMIENTO DE LA BASE ----
@@ -283,19 +283,17 @@ Tb_BoxCox %>%
   geom_boxplot() +
   labs(title = "Distribución de diferencias mensuales", x = "Mes", y = "Diferencia respecto al valor anterior")
 
-# ESTIMACION DE LA COMPONENTE ESTACIONAL PARA LA SERIE SIN TENDENCIA KERNEL ----
+# ESTIMACION DE LA COMPONENTE ESTACIONAL PARA LA SERIE ORIGINAL ----
 
-TsbApertura <- as_tsibble(Sin.Tend.Ker, key = df_Apertura$Fecha, index = date)
-TsbApertura$index <- as.Date(tibble_Apertura$Fecha)
-TsbApertura <- as_tsibble(TsbApertura)
+TsbApertura <- as_tsibble(G_ARGOS[,c(1,3)], index = Fecha)
 
 Mod.Est.Apertura <-  TsbApertura %>% model(
-  'Fourier (1 Componentes)' = ARIMA(value ~ fourier(K = 1) + pdq(0, 0, 0) + PDQ(0, 0, 2)),
-  'Fourier (2 Componentes)' = ARIMA(value ~ fourier(K = 2.5) + pdq(0, 0, 0) + PDQ(0, 0, 3)),
-  'Dummy' = ARIMA(value ~ season() + pdq(0, 0, 0) + PDQ(0, 0, 1))
+  'Fourier (1 Componentes)' = ARIMA(Apertura ~ fourier(K = 1) + pdq(0, 0, 0) + PDQ(0, 0, 2)),
+  'Fourier (2 Componentes)' = ARIMA(Apertura ~ fourier(K = 2.5) + pdq(0, 0, 0) + PDQ(0, 0, 3)),
+  'Dummy' = ARIMA(Apertura ~ season() + pdq(0, 0, 0) + PDQ(0, 0, 1))
 )
 
-Mod.Ajd.Est.Apertura<-TsbApertura%>%
+Mod.Ajd.Est.Apertura <- TsbApertura%>%
   left_join(fitted(Mod.Est.Apertura)|>group_by(.model)%>%
               pivot_wider(names_from = .model, values_from = .fitted))
 
@@ -328,7 +326,7 @@ for (i in 3:5) {  # Columnas 3 a 5 corresponden a 'Fourier (2 Componentes)', 'Fo
   
   # Graficar los datos originales vs. valores ajustados para la columna actual
   plot(
-    x = Mod.Ajd.Est.Apertura$index,
+    x = Mod.Ajd.Est.Apertura$Fecha,
     y = Mod.Ajd.Est.Apertura[, i],
     type = 'l',
     col = 'red',  # Color para la serie ajustada
@@ -341,10 +339,309 @@ for (i in 3:5) {  # Columnas 3 a 5 corresponden a 'Fourier (2 Componentes)', 'Fo
   
   # Agregar la línea de los datos originales ('value') en negro
   lines(
-    x = Mod.Ajd.Est.Apertura$index,
-    y = Mod.Ajd.Est.Apertura$value,
+    x = Mod.Ajd.Est.Apertura$Fecha,
+    y = Mod.Ajd.Est.Apertura$Apertura,
     type = 'l',
     col = 'black',  # Color negro para los datos originales
     lwd = 0.7  # Grosor de la línea
   )
 }
+
+par(mfrow = c(1,1))
+
+# PRONOSTICO BASADO EN DESCOMPOSICION ----
+
+fit <- stl(BoxCox2, t.window=31, s.window="periodic", robust=TRUE)
+
+# Obtener la componente ajustada estacionalmente
+seasadj_fit <- seasadj(fit)
+
+# Realizar la predicción naive
+naive_forecast <- naive(seasadj_fit, h=60) # Aumenta el horizonte de predicción
+
+# Visualizar la predicción con autoplot y ggplot2
+autoplot(naive_forecast) +
+  ylab("Nuevo índices ordenados.") +
+  ggtitle("Pronóstico Naive de la componente ajustada estacionalmente") +
+  theme_minimal() + # Usar un tema minimalista
+  theme(
+    plot.title = element_text(hjust = 0.5), # Centrar el título
+    legend.position = "bottom", # Colocar la leyenda en la parte inferior
+    legend.title = element_blank() # Quitar el título de la leyenda
+  ) +
+  scale_color_manual(values = c("blue", "red")) + # Personalizar colores
+  scale_fill_manual(values = c("lightblue", "pink")) # Personalizar colores de bandas
+
+
+fit %>% forecast(method="naive") %>%
+  autoplot() + ylab("New orders index")
+
+# SUAVIZAMIENTO EXPONENCIAL ----
+
+Tsi_Apertura <- as_tsibble(G_ARGOS[,c(1,3)], index = Fecha)
+
+HWAP <- HoltWinters(BoxCox2, seasonal = "additive")
+plot(HWAP)
+
+ajustados <- fitted(HWAP)
+plot(ajustados)
+
+summary(HWAP)
+
+predictionHWAP=forecast::forecast(HWAP,h=60,level =0.95,lambda = 0)
+predictionHWAP
+plot(predictionHWAP)
+
+ajustepass <- Tsi_Apertura %>%
+  model(ETS(Apertura~ error("A")+trend("A")+season("A")))
+
+pronostico=ajustepass%>%
+  fabletools::forecast(h=60)
+pronostico
+
+pronostico %>% autoplot(Tsi_Apertura) +
+  geom_line(aes(y=.fitted),col="#D55E00",data=augment(ajustepass)) + 
+  labs(y=" ",title="Pronóstico u ajustados") + 
+  guides(colour="none")
+
+modelos <- Tsi_Apertura %>%
+  model(ets=ETS(Apertura ~ error("A")+trend("A")+season("A")),
+        stl=decomposition_model(STL(Apertura ~ trend(window = 13) +
+                                      season(window = "periodic"),
+                                    robust = TRUE),NAIVE(season_adjust)))
+modelos 
+
+# Realizar la predicción
+predicciones <- modelos %>% fabletools::forecast(h = 60)
+
+# Visualizar el pronóstico desde 2018
+autoplot(predicciones, Tsi_Apertura) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+               limits = as.Date(c("2018-01-01", NA))) +
+  ylab("Nuevo índices ordenados.") +
+  ggtitle("Pronóstico desde 2018") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+# MODELTIME PARA ETS
+
+Aper_tbl <- as_tibble(tsibble_Aper)
+Aper_tbl$index = as.Date(tsibble_Aper$Fecha)
+Aper_tbl <- Aper_tbl %>% mutate(BoxCox = exp(BoxCox2))
+
+Aper_tbl <- Aper_tbl[,c(1,2,4)]
+
+Aper_tbl
+
+
+splits_Aper_tbl = timetk::time_series_split(Aper_tbl, date_var = Fecha, 
+                                            assess = 1000 ,cumulative = TRUE)
+
+splits_Aper_tbl %>% tk_time_series_cv_plan()%>%
+  plot_time_series_cv_plan(Fecha, BoxCox2)
+
+ets_Apertura <- modeltime::exp_smoothing(
+  error="additive",
+  trend="additive",
+  season="additive"
+) %>%
+  set_engine("ets")%>%
+  fit(BoxCox2 ~ Fecha, data = training(splits_Aper_tbl))
+
+# Modeltime ----
+
+modeltime_table(ets_Apertura) %>%
+  modeltime_calibrate(testing(splits_Aper_tbl))%>%
+  modeltime_forecast(
+    new_data = testing(splits_Aper_tbl),
+    actual_data = Aper_tbl
+  )%>%
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
+
+pronostico_ets<-modeltime_table(ets_Apertura) %>%
+  modeltime_calibrate(testing(splits_Aper_tbl))%>%
+  modeltime_forecast(
+    new_data = testing(splits_Aper_tbl),
+    actual_data = Aper_tbl
+  )
+
+pronostico_ets 
+
+## Modeltime
+
+model_tbl<-modeltime_table(ets_Apertura)
+
+## Calibración 
+
+calibration_tbl<-model_tbl%>%
+  modeltime_calibrate(testing(splits_Aper_tbl))
+
+## Prueba de pronóstico
+
+calibration_tbl%>%
+  modeltime_forecast(
+    new_data = testing(splits_Aper_tbl),
+    actual_data = Aper_tbl
+  ) 
+
+## Residuales 
+
+residuales_ajuste <- model_tbl %>%
+  modeltime_calibrate(new_data=training(splits_Aper_tbl))%>%
+  modeltime_residuals()
+
+residuales_ajuste %>% plot_modeltime_residuals(
+  .type="timeplot",
+  .interactive = TRUE)
+
+### Precisión de los pronósticos
+
+calibration_tbl%>%
+  modeltime_accuracy()
+
+## Re-ajuste y predicción de valores futuros
+
+re_ajuste <- calibration_tbl %>%
+  modeltime_refit(data = Aper_tbl)
+
+re_ajuste%>%
+  modeltime_forecast(h = 365,
+                     actual_data = Aper_tbl
+  )%>%
+  plot_modeltime_forecast()
+
+## Especificando algunos valores del modelo 
+
+ets_Apertura_fixed<-modeltime::exp_smoothing(
+  error="additive",
+  trend="additive",
+  season="additive",
+  smooth_level=0.5,
+  smooth_trend=0.02,
+  smooth_seasonal=0.01
+)%>%
+  set_engine("ets")%>%
+  fit(BoxCox2 ~ Fecha, data = training(splits_Aper_tbl))
+
+# modeltime
+
+modeltime_table(ets_Apertura_fixed) %>%
+  modeltime_calibrate(testing(splits_Aper_tbl))%>%
+  modeltime_forecast(
+    new_data = testing(splits_Aper_tbl),
+    actual_data = Aper_tbl
+  )%>%
+  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
+
+pronostico_ets 
+
+
+## Modeltime
+
+model_tbl_fixed <- modeltime_table(ets_Apertura_fixed)
+
+## Calibración 
+
+calibration_tbl_fixed <- model_tbl_fixed %>%
+  modeltime_calibrate(testing(splits_Aper_tbl))
+
+## Prueba de pronóstico
+
+calibration_tbl_fixed %>%
+  modeltime_forecast(
+    new_data = testing(splits_Aper_tbl),
+    actual_data = Aper_tbl
+  ) 
+
+### Precisión de los pronósticos
+
+calibration_tbl_fixed%>%
+  modeltime_accuracy()
+
+# EVALUACION DE PRONOSTICOS ----
+
+# Definir h
+h <- 30
+
+# Definir las longitudes de la serie y la porción de entrenamiento
+lserie <- length(BoxCox2)
+ntrain <- trunc(lserie * 0.85)
+
+# Crear conjuntos de entrenamiento y prueba
+train <- window(BoxCox2, end = time(BoxCox2)[ntrain])
+test <- window(BoxCox2, start = time(BoxCox2)[ntrain] + 1/365)
+
+# Inicializar variables
+ntest <- length(test)
+fchstepahe <- matrix(0, nrow = ntest, ncol = h)
+
+verval <- matrix(NA, nrow = ntest, ncol = h)
+for (j in 1:h) {
+  verval[1:(ntest - j + 1), j] <- test[j:ntest]
+}
+colnames(verval) <- paste0("h", 1:h)
+
+
+# Ajuste del modelo Holt-Winters
+HWAP_train <- stats::HoltWinters(train, seasonal = "additive")
+
+# Extracción de parámetros del modelo
+alpha <- HWAP_train$alpha
+beta <- HWAP_train$beta
+gamma <- HWAP_train$gamma
+
+# Refinamiento y predicción
+for (i in 1:ntest) {
+  x <- window(BoxCox2, end = time(BoxCox2)[ntrain] + (i - 1) / 365)
+  refit <- stats::HoltWinters(x, seasonal = "additive", alpha = alpha, 
+                              beta = beta, gamma = gamma)
+  fchstepahe[i, ] <- as.numeric(forecast::forecast(refit, h = h)$mean)
+}
+
+# Cálculo de errores
+
+errores_pred <- fchstepahe - verval
+ECM <- apply(errores_pred^2, MARGIN = 2, mean, na.rm = TRUE)
+RECM <- sqrt(ECM)
+RECM
+
+
+# ROLLING ----
+
+library(greybox)
+
+
+# Definir y ajustar el modelo Holt-Winters
+HWAP_train <- stats::HoltWinters(train, seasonal = "additive")
+
+# Definir 'ourCallETS' y 'ourValueETS'
+ourCallETS <- "forecast::forecast(stats::HoltWinters(train, alpha=HWAP_train$alpha, beta=HWAP_train$beta, gamma=HWAP_train$gamma), h=h, level=95)"
+ourValueETS <- c("mean", "lower", "upper")
+
+# Llamada a 'ro' para generar predicciones
+origins <- 30
+Valoresretornados1 <- ro(BoxCox2, h = h, origins = origins, call = ourCallETS, value = ourValueETS, ci = FALSE, co = FALSE)
+
+# Verificar dimensiones
+holdout_dim <- dim(Valoresretornados1$holdout)
+mean_dim <- dim(Valoresretornados1$mean)
+print(paste("Dimensiones de holdout: ", toString(holdout_dim)))
+print(paste("Dimensiones de mean: ", toString(mean_dim)))
+
+# Calcular el error si las dimensiones coinciden
+if (all(holdout_dim == mean_dim)) {
+  RECM <- apply(sqrt((Valoresretornados1$holdout - Valoresretornados1$mean)^2), 1, mean, na.rm=TRUE)
+  RECM
+} else {
+  stop("Dimensiones de 'holdout' y 'mean' no coinciden.")
+}
+
+
+apply(abs(Valoresretornados1$holdout - -Valoresretornados1$mean),
+      1, mean, na.rm = TRUE) / mean(Valoresretornados1$actuals) ### Error medio absoluto escalado
+
+
