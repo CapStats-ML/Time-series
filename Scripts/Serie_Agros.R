@@ -170,9 +170,11 @@ Sin.Tend.STL <- BoxCox2 - Comp$trend
 
 plot(Sin.Tend.STL, main='Serie sin tendencia STL', xlab="Año", ylab="Trans BoxCox")
 
+acf(Sin.Tend.STL, lag.max = 100)
+
 # ESTIMACION DE LA TENDENCIA USANDO SPLINES ----
 
-Spl_BoxCox <- smooth.spline(x = time(BoxCox2), y = BoxCox2, spar = 0.80)
+Spl_BoxCox <- smooth.spline(x = time(BoxCox2), y = BoxCox2, spar = 0.90)
 
 Sin.Tend.Spl <- BoxCox2 - Spl_BoxCox$y
 
@@ -181,9 +183,11 @@ lines(x = Spl_BoxCox$x, y=Spl_BoxCox$y, col = 'red')
 
 plot(Sin.Tend.Spl, main='Serie sin tendencia SPLINES',xlab='Año',ylab="BoxCox")
 
+acf(Sin.Tend.Spl, lag.max = 100)
+
 # ESTIMACION DE LA TENDENCIA USANDO REGRESION KERNEL ----
 
-Ker_BoxCox <- ksmooth(x = time(BoxCox2), y = BoxCox2, kernel = "normal", bandwidth = 0.25)
+Ker_BoxCox <- ksmooth(x = time(BoxCox2), y = BoxCox2, kernel = "normal", bandwidth = 0.1)
 
 plot(BoxCox2)
 lines(x = Ker_BoxCox$x, Ker_BoxCox$y, col = "red")
@@ -191,6 +195,7 @@ lines(x = Ker_BoxCox$x, Ker_BoxCox$y, col = "red")
 Sin.Tend.Ker <- BoxCox2 - Ker_BoxCox$y
 plot(Sin.Tend.Ker, main="Serie sin tendencia KERNEL", xlab="AÑO", ylab="BoxCoX")
 
+acf(Sin.Tend.Ker, lag.max = 100)
 
 # Dickey-Fuller PARA DETERMINAR SI LA SERIE ES ESTACIONARIA ----
 
@@ -207,10 +212,18 @@ tseries::adf.test(Diff_BoxCox)# La prueba indica que la serie diferenciada si es
 
 plot(Diff_BoxCox)
 
+acf(Diff_BoxCox, lag.max = 100)
+
 # RELACIONES NO LINEALES PARA LA SERIE EN TRANFORMADA Y DIFERENCIADA ----
 
 par(mar = c(3,2,3,2))
 astsa::lag1.plot(Diff_BoxCox, 12, corr = T)
+
+
+
+par(mar = c(3,2,3,2))
+astsa::lag1.plot(Sin.Tend.Ker, 12, corr = T)
+
 
 #INDICE DE INFORMACION MUTUA (AMI) PARA LA SERIE EN TRANSFORMADA Y DIFERENCIADA ----
 
@@ -221,9 +234,16 @@ nonlinearTseries::mutualInformation(Diff_BoxCox, lag.max = 100,
                                     units = "Bits",
                                     do.plot = TRUE)
 
+par(mar = c(3,2,3,2))
+astsa::lag1.plot(Sin.Tend.Ker, 12, corr = F)
+nonlinearTseries::mutualInformation(Sin.Tend.Ker, lag.max = 100,
+                                    n.partitions = 50, 
+                                    units = "Bits",
+                                    do.plot = TRUE)
+
 # MAPAS DE CALOR
 
-TSstudio::ts_heatmap(Diff_BoxCox, padding = FALSE  ,
+TSstudio::ts_heatmap(Sin.Tend.Ker, padding = FALSE  ,
                      title = "Mapa de calor - Apertura Dif Argos en bolsa dias año")
 
 
@@ -351,13 +371,15 @@ par(mfrow = c(1,1))
 
 # PRONOSTICO BASADO EN DESCOMPOSICION ----
 
-fit <- stl(BoxCox2, t.window=31, s.window="periodic", robust=TRUE)
+#fit <- stl(BoxCox2, t.window=31, s.window="periodic", robust=TRUE)
+
+fit <- stl(Sin.Tend.Ker, s.window = 7, s.degree = 1, t.degree = 1, robust = TRUE)
 
 # Obtener la componente ajustada estacionalmente
 seasadj_fit <- seasadj(fit)
 
 # Realizar la predicción naive
-naive_forecast <- naive(seasadj_fit, h=60) # Aumenta el horizonte de predicción
+naive_forecast <- naive(seasadj_fit, h = 30) # Aumenta el horizonte de predicción
 
 # Visualizar la predicción con autoplot y ggplot2
 autoplot(naive_forecast) +
@@ -378,9 +400,16 @@ fit %>% forecast(method="naive") %>%
 
 # SUAVIZAMIENTO EXPONENCIAL ----
 
-Tsi_Apertura <- as_tsibble(G_ARGOS[,c(1,3)], index = Fecha)
+STK <- as.matrix(Sin.Tend.Ker)
+STK <- as.matrix(cbind(as.Date(G_ARGOS[,1]), SKT))
+STK <- as.data.frame(STK)
+names <-  c("Fecha", "Apertura")
+colnames(STK) <- names
+STK$Fecha <- as.Date(STK$Fecha) 
+ST_Kernel <- as_tsibble(STK[,c(1,2)], index = Fecha)
 
-HWAP <- HoltWinters(BoxCox2, seasonal = "additive")
+HWAP <- HoltWinters(Sin.Tend.Ker, seasonal = "additive")
+
 plot(HWAP)
 
 ajustados <- fitted(HWAP)
@@ -388,23 +417,23 @@ plot(ajustados)
 
 summary(HWAP)
 
-predictionHWAP=forecast::forecast(HWAP,h=60,level =0.95,lambda = 0)
+predictionHWAP=forecast::forecast(HWAP, h=30, level =0.95, lambda = 0)
 predictionHWAP
-plot(predictionHWAP)
+plot(predictionHWAP, xlim = c(2018,2020.0822))
 
-ajustepass <- Tsi_Apertura %>%
+ajustepass <- ST_Kernel %>%
   model(ETS(Apertura~ error("A")+trend("A")+season("A")))
 
 pronostico=ajustepass%>%
   fabletools::forecast(h=60)
 pronostico
 
-pronostico %>% autoplot(Tsi_Apertura) +
+pronostico %>% autoplot(ST_Kernel) +
   geom_line(aes(y=.fitted),col="#D55E00",data=augment(ajustepass)) + 
-  labs(y=" ",title="Pronóstico u ajustados") + 
+  labs(y=" ",title="Pronósticos ajustados") + 
   guides(colour="none")
 
-modelos <- Tsi_Apertura %>%
+modelos <- ST_Kernel %>%
   model(ets=ETS(Apertura ~ error("A")+trend("A")+season("A")),
         stl=decomposition_model(STL(Apertura ~ trend(window = 13) +
                                       season(window = "periodic"),
@@ -412,10 +441,10 @@ modelos <- Tsi_Apertura %>%
 modelos 
 
 # Realizar la predicción
-predicciones <- modelos %>% fabletools::forecast(h = 60)
+predicciones <- modelos %>% fabletools::forecast(h = 30)
 
 # Visualizar el pronóstico desde 2018
-autoplot(predicciones, Tsi_Apertura) +
+autoplot(predicciones, ST_Kernel) +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y",
                limits = as.Date(c("2018-01-01", NA))) +
   ylab("Nuevo índices ordenados.") +
@@ -427,7 +456,7 @@ autoplot(predicciones, Tsi_Apertura) +
     legend.title = element_blank()
   )
 
-# MODELTIME PARA ETS
+# MODELTIME PARA ETS (ÑÑÑÑÑÑÑÑÑÑÑÑÑÑ AQUI QUEDO LA COSA ÑÑÑÑÑÑÑÑÑÑÑÑÑÑÑÑ)
 
 Aper_tbl <- as_tibble(tsibble_Aper)
 Aper_tbl$index = as.Date(tsibble_Aper$Fecha)
