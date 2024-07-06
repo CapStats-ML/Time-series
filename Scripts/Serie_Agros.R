@@ -87,6 +87,8 @@ abline(fit_Aper, col = "red")
 Aper.sin.tend <- BoxCox2 - predict(fit_Aper)
 plot(Aper.sin.tend, main='SERIE SIN TENDENCIA',xlab='Año',ylab='Trans BoxCox2')
 
+acf(Aper.sin.tend, lag.max = 100)
+
 ### LOESS PARA BOXCOX ----
 
 df_Aper <- data.frame(Fecha = G_ARGOS$Fecha, BoxCox2 = as.matrix(BoxCox2))
@@ -371,8 +373,6 @@ par(mfrow = c(1,1))
 
 # PRONOSTICO BASADO EN DESCOMPOSICION ----
 
-#fit <- stl(BoxCox2, t.window=31, s.window="periodic", robust=TRUE)
-
 fit <- stl(Sin.Tend.Ker, s.window = 7, s.degree = 1, t.degree = 1, robust = TRUE)
 
 # Obtener la componente ajustada estacionalmente
@@ -401,7 +401,7 @@ fit %>% forecast(method="naive") %>%
 # SUAVIZAMIENTO EXPONENCIAL ----
 
 STK <- as.matrix(Sin.Tend.Ker)
-STK <- as.matrix(cbind(as.Date(G_ARGOS[,1]), SKT))
+STK <- as.matrix(cbind(as.Date(G_ARGOS[,1]), STK))
 STK <- as.data.frame(STK)
 names <-  c("Fecha", "Apertura")
 colnames(STK) <- names
@@ -456,11 +456,11 @@ autoplot(predicciones, ST_Kernel) +
     legend.title = element_blank()
   )
 
-# MODELTIME PARA ETS (ÑÑÑÑÑÑÑÑÑÑÑÑÑÑ AQUI QUEDO LA COSA ÑÑÑÑÑÑÑÑÑÑÑÑÑÑÑÑ)
+# MODELTIME PARA ETS 
 
-Aper_tbl <- as_tibble(tsibble_Aper)
-Aper_tbl$index = as.Date(tsibble_Aper$Fecha)
-Aper_tbl <- Aper_tbl %>% mutate(BoxCox = exp(BoxCox2))
+Aper_tbl <- as_tibble(ST_Kernel)
+Aper_tbl$index = as.Date(ST_Kernel$Fecha)
+Aper_tbl <- Aper_tbl %>% mutate(Apertura2 = exp(Apertura))
 
 Aper_tbl <- Aper_tbl[,c(1,2,4)]
 
@@ -471,7 +471,7 @@ splits_Aper_tbl = timetk::time_series_split(Aper_tbl, date_var = Fecha,
                                             assess = 1000 ,cumulative = TRUE)
 
 splits_Aper_tbl %>% tk_time_series_cv_plan()%>%
-  plot_time_series_cv_plan(Fecha, BoxCox2)
+  plot_time_series_cv_plan(Fecha, Apertura2)
 
 ets_Apertura <- modeltime::exp_smoothing(
   error="additive",
@@ -479,7 +479,7 @@ ets_Apertura <- modeltime::exp_smoothing(
   season="additive"
 ) %>%
   set_engine("ets")%>%
-  fit(BoxCox2 ~ Fecha, data = training(splits_Aper_tbl))
+  fit(Apertura2 ~ Fecha, data = training(splits_Aper_tbl))
 
 # Modeltime ----
 
