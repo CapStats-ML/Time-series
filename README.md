@@ -1,4 +1,7 @@
 # Repositorio de Series Temporales - UNAL 2024:01
+
+Este repositorio esta desactivado devido a la separacion del equipo de trabajo, los adelantos finales del trabajo por parte de cada uno de los integrantes seran visibles en nuevos repositorios de Git. 
+
 **Docente:**
 - Sergio Caldero
 
